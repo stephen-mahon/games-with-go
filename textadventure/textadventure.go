@@ -1,10 +1,18 @@
 package main
 
 // some ideas
+// Use Tower of Ghenjei from WoT ToM
+//		Structure of rooms for escape needs to go back on itself
+//		Riddles from Eelfinn and Aelfinn
 // Add NPC - talk, fight pokemon style
+// 		Maybe start with a note on the round
+//		Fight grue when room is lit and have sword
 // NPC move around
+//		Grue moves to next dark room
 // items that can be picked up or placed down
+//		Add lamp and key
 // Parse natural language as input. Close approximations verbs, nouns, etc
+//		Maybe later.
 
 import (
 	"bufio"
