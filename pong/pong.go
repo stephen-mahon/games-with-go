@@ -4,15 +4,18 @@ package main
 // =====
 // [X] Frame rate independence
 // [X] ** Score ** -- up to 3
-// [ ] Game over state - win/lose
+// [X] Game over state - win/lose
 // [ ] 2 player mode
 // [ ] AI needs to be more imperfect
 // [ ] Handeling resizing of window
 // [ ] Mouse play?
 // [ ] load bitmaps for paddles and balls
+// [ ] change angle of incident of reflection
+// [ ] add paddle.y vel to ball.y vel
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
@@ -143,12 +146,14 @@ func (ball *ball) update(leftPaddle *paddle, rightPaddle *paddle, elaspedTime fl
 		if ball.y > leftPaddle.y-leftPaddle.h/2 &&
 			ball.y < leftPaddle.y+leftPaddle.h/2 {
 			ball.xv = -ball.xv
+			ball.x = leftPaddle.x + leftPaddle.w/2 + ball.radius
 		}
 	}
 	if ball.x+ball.radius > rightPaddle.x-rightPaddle.w/2 {
 		if ball.y > rightPaddle.y-rightPaddle.h/2 &&
 			ball.y < rightPaddle.y+rightPaddle.h/2 {
 			ball.xv = -ball.xv
+			ball.x = rightPaddle.x - rightPaddle.w/2 - ball.radius
 		}
 	}
 }
@@ -180,12 +185,17 @@ func (paddle *paddle) draw(pixels []byte) {
 	drawNum(pos{numX, 35}, paddle.color, 10, paddle.score, pixels)
 }
 
-func (paddle *paddle) update(keyState []uint8, elaspedTime float32) {
+func (paddle *paddle) update(keyState []uint8, controllerAxis int16, elaspedTime float32) {
 	if keyState[sdl.SCANCODE_UP] != 0 {
 		paddle.y -= paddle.speed * elaspedTime
 	}
 	if keyState[sdl.SCANCODE_DOWN] != 0 {
 		paddle.y += paddle.speed * elaspedTime
+	}
+
+	if math.Abs(float64(controllerAxis)) > 1500 {
+		pct := float32(controllerAxis) / 32767.0
+		paddle.y += paddle.speed * pct * elaspedTime
 	}
 }
 
@@ -239,6 +249,12 @@ func main() {
 	}
 	defer tex.Destroy()
 
+	var controllerHandlers []*sdl.GameController
+	for i := 0; i < sdl.NumJoysticks(); i++ {
+		controllerHandlers = append(controllerHandlers, sdl.GameControllerOpen(i))
+		defer controllerHandlers[i].Close()
+	}
+
 	pixels := make([]byte, winWidth*winHeight*4)
 
 	player1 := paddle{pos{50, 100}, 20, 100, 300, 0, color{255, 255, 255}}
@@ -249,6 +265,7 @@ func main() {
 
 	var frameStart time.Time
 	var elaspedTime float32
+	var controllerAxis int16
 
 	// game loop
 	for {
@@ -260,9 +277,15 @@ func main() {
 				return
 			}
 		}
+
+		for _, controller := range controllerHandlers {
+			if controller != nil {
+				controllerAxis = controller.Axis(sdl.CONTROLLER_AXIS_LEFTY)
+			}
+		}
 		// updating iota for game state
 		if state == play {
-			player1.update(keyState, elaspedTime)
+			player1.update(keyState, controllerAxis, elaspedTime)
 			player2.aiUpdate(&ball, elaspedTime)
 			ball.update(&player1, &player2, elaspedTime)
 		} else if state == start {
@@ -287,7 +310,7 @@ func main() {
 		// basic framerate independence setup
 		elaspedTime = float32(time.Since(frameStart).Seconds())
 		if elaspedTime < 0.005 {
-			sdl.Delay(5 - uint32(elaspedTime/1000.0))
+			sdl.Delay(5 - uint32(elaspedTime*1000.0))
 			elaspedTime = float32(time.Since(frameStart).Seconds())
 		}
 	}
