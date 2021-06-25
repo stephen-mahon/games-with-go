@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
+	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -88,24 +91,41 @@ func fbm2(x, y, frequency, lacunarity, gain float32, octaves int) float32 {
 	return sum
 }
 
-func makeNoise(pixels []byte, frequency, lacunarity, gain float32, octaves int) {
+func makeNoise(pixels []byte, frequency, lacunarity, gain float32, octaves, w int) {
+	startTime := time.Now()
 	noise := make([]float32, winWidth*winHeight)
 	fmt.Println("freq:", frequency, "lac:", lacunarity, "gain:", gain, "octaves:", octaves)
-	i := 0
 	min := float32(9999.0) //I think there is work around for this in Go
 	max := float32(-9999.0)
 
-	for y := 0; y < winHeight; y++ {
-		for x := 0; x < winWidth; x++ {
-			noise[i] = turbulence(float32(x), float32(y), frequency, lacunarity, gain, octaves)
-			if noise[i] < min {
-				min = noise[i]
-			} else if noise[i] > max {
-				max = noise[i]
+	numRoutines := runtime.NumCPU()
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	batchSize := len(noise) / numRoutines
+	for i := 0; i < numRoutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			start := i * batchSize
+			end := start + batchSize - 1
+			for j := start; j < end; j++ {
+				x := j % w
+				y := (j - x) / w
+				noise[j] = turbulence(float32(x), float32(y), frequency, lacunarity, gain, octaves)
+
+				// Does min max work in a multiple thread routine?
+				// mutex? https://tour.golang.org/concurrency/9
+				if noise[j] < min {
+					min = noise[j]
+				} else if noise[j] > max {
+					max = noise[j]
+				}
+
 			}
-			i++
-		}
+		}(i)
 	}
+	wg.Wait()
+	elsapedTime := time.Since(startTime).Seconds() * 1000.0
+	fmt.Println(elsapedTime)
 	//gradient := getDualGradient(color{0, 0, 175}, color{80, 160, 244}, color{12, 192, 75}, color{255, 255, 255})
 	gradient := getGradient(color{255, 0, 0}, color{255, 242, 0})
 	rescaleAndDraw(noise, min, max, gradient, pixels)
@@ -162,7 +182,7 @@ func main() {
 	lac := float32(3.0)
 	octaves := 3
 
-	makeNoise(pixels, frequency, lac, gain, octaves)
+	makeNoise(pixels, frequency, lac, gain, octaves, winWidth)
 	keyState := sdl.GetKeyboardState()
 
 	// game loop
@@ -180,20 +200,20 @@ func main() {
 		}
 		if keyState[sdl.SCANCODE_O] != 0 {
 			octaves += 1 * mult
-			makeNoise(pixels, frequency, lac, gain, octaves)
+			makeNoise(pixels, frequency, lac, gain, octaves, winWidth)
 
 		}
 		if keyState[sdl.SCANCODE_F] != 0 {
 			frequency += 0.001 * float32(mult)
-			makeNoise(pixels, frequency, lac, gain, octaves)
+			makeNoise(pixels, frequency, lac, gain, octaves, winWidth)
 		}
 		if keyState[sdl.SCANCODE_G] != 0 {
 			gain += 0.1 * float32(mult)
-			makeNoise(pixels, frequency, lac, gain, octaves)
+			makeNoise(pixels, frequency, lac, gain, octaves, winWidth)
 		}
 		if keyState[sdl.SCANCODE_L] != 0 {
 			lac += 0.1 * float32(mult)
-			makeNoise(pixels, frequency, lac, gain, octaves)
+			makeNoise(pixels, frequency, lac, gain, octaves, winWidth)
 		}
 
 		tex.Update(nil, pixels, winWidth*4)
