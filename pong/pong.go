@@ -124,7 +124,8 @@ func clamp(min, max, v int) int {
 	return v
 }
 
-func rescaleAndDraw(noise []float32, min, max float32, gradient []color, pixels []byte) {
+func rescaleAndDraw(noise []float32, min, max float32, gradient []color, w, h int) []byte {
+	result := make([]byte, w*h*4)
 	scale := 255.0 / (max - min)
 	offset := min * scale
 
@@ -132,10 +133,11 @@ func rescaleAndDraw(noise []float32, min, max float32, gradient []color, pixels 
 		noise[i] = noise[i]*scale - offset
 		c := gradient[clamp(0, 255, int(noise[i]))]
 		p := i * 4
-		pixels[p] = c.r
-		pixels[p+1] = c.g
-		pixels[p+2] = c.b
+		result[p] = c.r
+		result[p+1] = c.g
+		result[p+2] = c.b
 	}
+	return result
 }
 
 func drawNum(pos pos, color color, size int, score int, pixels []byte) {
@@ -317,8 +319,9 @@ func main() {
 
 	keyState := sdl.GetKeyboardState()
 
-	noise, min, max := noise.MakeNoise(noise.FBM, 0.01, 0.2, 2, 3, winWidth, winHeight)
+	noise, min, max := noise.MakeNoise(noise.TURBULENCE, 0.001, 0.2, 2, 3, winWidth, winHeight)
 	gradient := getGradient(color{255, 0, 0}, color{0, 0, 0})
+	noisePixels := rescaleAndDraw(noise, min, max, gradient, winWidth, winHeight)
 
 	var frameStart time.Time
 	var elaspedTime float32
@@ -356,7 +359,9 @@ func main() {
 			}
 		}
 
-		rescaleAndDraw(noise, min, max, gradient, pixels)
+		for i := range noisePixels {
+			pixels[i] = noisePixels[i]
+		}
 		player1.draw(pixels)
 		player2.draw(pixels)
 		ball.draw(pixels)
