@@ -371,7 +371,7 @@ func main() {
 		renderer.Present()
 
 		// basic framerate independence setup
-		elaspedTime = float32(time.Since(frameStart).Seconds())
+		elaspedTime = float32(time.Since(frameStart).Seconds() * 1000)
 		if elaspedTime < 0.005 {
 			sdl.Delay(5 - uint32(elaspedTime*1000.0))
 			elaspedTime = float32(time.Since(frameStart).Seconds())
