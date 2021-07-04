@@ -124,17 +124,21 @@ func (tex *texture) drawBilinearScaled(scaleX, scaleY float32, pixels []byte) {
 				tx := fx - float32(fxi)
 
 				for i := 0; i < 4; i++ {
-					c00 := float32(tex.pixels[c00i+1])
-					c10 := float32(tex.pixels[c10i+1])
-					c01 := float32(tex.pixels[c01i+1])
-					c11 := float32(tex.pixels[c11i+1])
+					c00 := float32(tex.pixels[c00i+i])
+					c10 := float32(tex.pixels[c10i+i])
+					c01 := float32(tex.pixels[c01i+i])
+					c11 := float32(tex.pixels[c11i+i])
 
 					pixels[screenIndex] = byte(blerp(c00, c10, c01, c11, tx, ty))
 					screenIndex++
+
 				}
+
 			}
+
 		}
 	}
+
 }
 
 // https://en.wikipedia.org/wiki/Alpha_compositing
