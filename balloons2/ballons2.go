@@ -8,37 +8,36 @@ package main
 import (
 	"fmt"
 	"image/png"
+	"math/rand"
 	"os"
 	"time"
 
 	"github.com/stephen-mahon/games-with-go/noise"
+	. "github.com/stephen-mahon/games-with-go/vec3"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight int = 800, 600
+const winWidth, winHeight, winDepth int = 800, 600, 100
 
 type balloon struct {
-	tex *sdl.Texture
-	pos
-	scale float32
-	w, h  int
+	tex  *sdl.Texture
+	pos  Vector3
+	dir  Vector3
+	w, h int
 }
 
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
-	newW := int32(float32(balloon.w) * balloon.scale)
-	newH := int32(float32(balloon.h) * balloon.scale)
-	x := int32(balloon.x - float32(newW)/2)
-	y := int32(balloon.y - float32(newH)/2)
+	scale := balloon.pos.Z/200 + 1
+	newW := int32(float32(balloon.w) * scale)
+	newH := int32(float32(balloon.h) * scale)
+	x := int32(balloon.pos.X - float32(newW)/2)
+	y := int32(balloon.pos.Y - float32(newH)/2)
 	rect := &sdl.Rect{x, y, newW, newH}
 	renderer.Copy(balloon.tex, nil, rect)
 }
 
 type rgba struct {
 	r, g, b byte
-}
-
-type pos struct {
-	x, y float32
 }
 
 func clear(pixels []byte) {
@@ -65,10 +64,10 @@ func pixelsToTexture(renderer *sdl.Renderer, pixels []byte, w, h int) *sdl.Textu
 	return tex
 }
 
-func loadBalloon(renderer *sdl.Renderer) []balloon {
+func loadBalloon(renderer *sdl.Renderer, numBallons int) []*balloon {
 
 	balloonStrs := []string{"balloon_red.png", "balloon_green.png", "balloon_blue.png"}
-	balloons := make([]balloon, len(balloonStrs))
+	balloonTextures := make([]*sdl.Texture, len(balloonStrs))
 
 	for i, bstr := range balloonStrs {
 		infile, err := os.Open(bstr)
@@ -105,8 +104,21 @@ func loadBalloon(renderer *sdl.Renderer) []balloon {
 		if err != nil {
 			panic(err)
 		}
-		balloons[i] = balloon{tex, pos{float32(i * 120), float32(i * 120)}, float32(1+i) / 2, w, h}
+		balloonTextures[i] = tex
 	}
+
+	balloons := make([]*balloon, numBallons)
+	for i := range balloons {
+		tex := balloonTextures[i%3]
+		pos := Vector3{rand.Float32() * float32(winWidth), rand.Float32() * float32(winHeight), rand.Float32() * float32(winDepth)}
+		dir := Vector3{rand.Float32() * 10, rand.Float32() * 10, rand.Float32() * 10}
+		_, _, w, h, err := tex.Query()
+		if err != nil {
+			panic(err)
+		}
+		balloons[i] = &balloon{tex, pos, dir, int(w), int(h)}
+	}
+
 	return balloons
 }
 
@@ -190,20 +202,12 @@ func main() {
 	defer renderer.Destroy()
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 
-	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(winWidth), int32(winHeight))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer tex.Destroy()
-
 	cloudNoise, min, max := noise.MakeNoise(noise.FBM, .009, .5, 3, 3, winWidth, winHeight)
 	cloudGradient := getGradient(rgba{0, 0, 255}, rgba{255, 255, 255})
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloon(renderer)
-	dir := 1
+	balloons := loadBalloon(renderer, 100)
 	for {
 		frameStart := time.Now()
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -219,18 +223,13 @@ func main() {
 			balloon.draw(renderer)
 		}
 
-		balloons[1].x += float32(1 * dir)
-		if balloons[1].x > 400 || balloons[1].x < 0 {
-			dir = dir * -1
-		}
-
 		renderer.Present()
 		// basic framerate independence setup
 		elaspedTime := float32(time.Since(frameStart).Seconds() * 1000)
 		fmt.Println("ms per frame:", elaspedTime)
 		if elaspedTime < 5 {
 			sdl.Delay(5 - uint32(elaspedTime))
-			elaspedTime = float32(time.Since(frameStart).Seconds())
+			elaspedTime = float32(time.Since(frameStart).Seconds() * 1000)
 		}
 
 	}
