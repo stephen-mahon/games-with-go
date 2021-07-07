@@ -26,6 +26,20 @@ type balloon struct {
 	w, h int
 }
 
+func (balloon *balloon) update(elaspedTime float32) {
+	p := Add(balloon.pos, Mult(balloon.dir, elaspedTime))
+	if p.X < 0 || p.X > float32(winWidth) {
+		balloon.dir.X = -balloon.dir.X
+	}
+	if p.Y < 0 || p.Y > float32(winHeight) {
+		balloon.dir.Y = -balloon.dir.Y
+	}
+	if p.Z < 0 || p.Z > float32(winDepth) {
+		balloon.dir.Z = -balloon.dir.Z
+	}
+	balloon.pos = Add(balloon.pos, Mult(balloon.dir, elaspedTime))
+}
+
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
 	scale := balloon.pos.Z/200 + 1
 	newW := int32(float32(balloon.w) * scale)
@@ -111,7 +125,7 @@ func loadBalloon(renderer *sdl.Renderer, numBallons int) []*balloon {
 	for i := range balloons {
 		tex := balloonTextures[i%3]
 		pos := Vector3{rand.Float32() * float32(winWidth), rand.Float32() * float32(winHeight), rand.Float32() * float32(winDepth)}
-		dir := Vector3{rand.Float32() * 10, rand.Float32() * 10, rand.Float32() * 10}
+		dir := Vector3{rand.Float32(), rand.Float32(), rand.Float32()}
 		_, _, w, h, err := tex.Query()
 		if err != nil {
 			panic(err)
@@ -208,6 +222,7 @@ func main() {
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
 	balloons := loadBalloon(renderer, 100)
+	var elaspedTime float32
 	for {
 		frameStart := time.Now()
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -220,12 +235,13 @@ func main() {
 		renderer.Copy(cloudTexture, nil, nil)
 
 		for _, balloon := range balloons {
+			balloon.update(elaspedTime)
 			balloon.draw(renderer)
 		}
 
 		renderer.Present()
 		// basic framerate independence setup
-		elaspedTime := float32(time.Since(frameStart).Seconds() * 1000)
+		elaspedTime = float32(time.Since(frameStart).Seconds() * 1000)
 		fmt.Println("ms per frame:", elaspedTime)
 		if elaspedTime < 5 {
 			sdl.Delay(5 - uint32(elaspedTime))
