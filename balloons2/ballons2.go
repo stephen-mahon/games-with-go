@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"math/rand"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/stephen-mahon/games-with-go/noise"
@@ -19,11 +20,43 @@ import (
 
 const winWidth, winHeight, winDepth int = 800, 600, 100
 
+type mouseState struct {
+	leftButton, rightButton bool
+	x, y                    int
+}
+
+func getMouseState() mouseState {
+	mouseX, mouseY, mouseButtonState := sdl.GetMouseState()
+	leftButton := mouseButtonState & sdl.ButtonLMask()
+	rightButton := mouseButtonState & sdl.ButtonRMask()
+	var result mouseState
+	result.x = int(mouseX)
+	result.y = int(mouseY)
+	result.leftButton = !(leftButton == 0)
+	result.rightButton = !(rightButton == 4)
+	return result
+}
+
 type balloon struct {
 	tex  *sdl.Texture
 	pos  Vector3
 	dir  Vector3
 	w, h int
+}
+
+type balloonArray []*balloon
+
+func (balloons balloonArray) Len() int {
+	return len(balloons)
+}
+
+func (balloons balloonArray) Swap(i, j int) {
+	balloons[i], balloons[j] = balloons[j], balloons[i]
+}
+
+func (balloons balloonArray) Less(i, j int) bool {
+	diff := balloons[i].pos.Z - balloons[j].pos.Z
+	return diff < -1
 }
 
 func (balloon *balloon) update(elaspedTime float32) {
@@ -41,7 +74,7 @@ func (balloon *balloon) update(elaspedTime float32) {
 }
 
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
-	scale := balloon.pos.Z/200 + 1
+	scale := (balloon.pos.Z/200 + 1) / 2
 	newW := int32(float32(balloon.w) * scale)
 	newH := int32(float32(balloon.h) * scale)
 	x := int32(balloon.pos.X - float32(newW)/2)
@@ -125,7 +158,7 @@ func loadBalloon(renderer *sdl.Renderer, numBallons int) []*balloon {
 	for i := range balloons {
 		tex := balloonTextures[i%3]
 		pos := Vector3{rand.Float32() * float32(winWidth), rand.Float32() * float32(winHeight), rand.Float32() * float32(winDepth)}
-		dir := Vector3{rand.Float32(), rand.Float32(), rand.Float32()}
+		dir := Vector3{rand.Float32() * 0.5, rand.Float32() * 0.5, rand.Float32() * 0.5}
 		_, _, w, h, err := tex.Query()
 		if err != nil {
 			panic(err)
@@ -221,8 +254,11 @@ func main() {
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloon(renderer, 100)
+	balloons := loadBalloon(renderer, 10)
 	var elaspedTime float32
+	currentMouseState := getMouseState()
+	prevMouseState := currentMouseState
+
 	for {
 		frameStart := time.Now()
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -231,22 +267,33 @@ func main() {
 				return
 			}
 		}
+		currentMouseState = getMouseState()
+
+		if !currentMouseState.leftButton && prevMouseState.leftButton {
+			fmt.Println("Left Click!")
+		}
 
 		renderer.Copy(cloudTexture, nil, nil)
 
 		for _, balloon := range balloons {
 			balloon.update(elaspedTime)
+		}
+
+		sort.Stable(balloonArray(balloons))
+
+		for _, balloon := range balloons {
 			balloon.draw(renderer)
 		}
 
 		renderer.Present()
 		// basic framerate independence setup
 		elaspedTime = float32(time.Since(frameStart).Seconds() * 1000)
-		fmt.Println("ms per frame:", elaspedTime)
+		//fmt.Println("ms per frame:", elaspedTime)
 		if elaspedTime < 5 {
 			sdl.Delay(5 - uint32(elaspedTime))
 			elaspedTime = float32(time.Since(frameStart).Seconds() * 1000)
 		}
+		prevMouseState = currentMouseState
 
 	}
 
