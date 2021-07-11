@@ -3,6 +3,9 @@ package main
 // To Do
 // [ ]	Try using insertion sort for balloons  - https://en.wikipedia.org/wiki/Insertion_sort
 // [ ]	Time it to see if you can beat Go's built sort
+// [ ]	Implement collisions with the balloons
+//			- Treat balloons as spheres - only check distance between center of balloons (use Vec3)
+//			- Minimum translation vector (see pong.go) [hard]
 
 import (
 	"fmt"
@@ -89,44 +92,65 @@ func (balloon *balloon) getCircle() (x, y, r float32) {
 	return x, y, r
 }
 
-func (balloon *balloon) update(elaspedTime float32,
+func updateBalloons(balloons []*balloon, elaspedTime float32,
 	currentMouseState mouseState,
 	prevMouseState mouseState,
-	audioState *audioState) {
-	numAnimation := 16
-	animationElasped := float32(time.Since(balloon.explosionStart).Seconds() * 1000)
-	animationIndex := numAnimation - 1 - int(animationElasped/balloon.explosionInterval)
-	if animationIndex < 0 {
-		balloon.exploding = false
-		balloon.exploded = true
-	}
+	audioState *audioState) []*balloon {
 
-	if !prevMouseState.leftButton && currentMouseState.leftButton {
-		x, y, r := balloon.getCircle()
-		mouseX := currentMouseState.x
-		mouseY := currentMouseState.y
-		xDiff := float32(mouseX) - x
-		yDiff := float32(mouseY) - y
-		dist := float32(math.Sqrt(float64(xDiff*xDiff + yDiff*yDiff)))
-		if dist < r {
-			sdl.ClearQueuedAudio(audioState.deviceID)
-			sdl.QueueAudio(audioState.deviceID, audioState.explosionBytes)
-			sdl.PauseAudioDevice(audioState.deviceID, false)
-			balloon.exploding = true
-			balloon.explosionStart = time.Now()
+	numAnimation := 16
+	balloonClicked := false
+	balloonsExploded := false
+	for i := len(balloons) - 1; i >= 0; i-- {
+		balloon := balloons[i]
+
+		if balloon.exploding {
+			animationElasped := float32(time.Since(balloon.explosionStart).Seconds() * 1000)
+			animationIndex := numAnimation - 1 - int(animationElasped/balloon.explosionInterval)
+			if animationIndex < 0 {
+				balloon.exploding = false
+				balloon.exploded = true
+				balloonsExploded = true
+			}
 		}
+
+		if !balloonClicked && !prevMouseState.leftButton && currentMouseState.leftButton {
+			x, y, r := balloon.getCircle()
+			mouseX := currentMouseState.x
+			mouseY := currentMouseState.y
+			xDiff := float32(mouseX) - x
+			yDiff := float32(mouseY) - y
+			dist := float32(math.Sqrt(float64(xDiff*xDiff + yDiff*yDiff)))
+			if dist < r {
+				balloonClicked = true
+				sdl.ClearQueuedAudio(audioState.deviceID)
+				sdl.QueueAudio(audioState.deviceID, audioState.explosionBytes)
+				sdl.PauseAudioDevice(audioState.deviceID, false)
+				balloon.exploding = true
+				balloon.explosionStart = time.Now()
+			}
+		}
+		p := Add(balloon.pos, Mult(balloon.dir, elaspedTime))
+		if p.X < 0 || p.X > float32(winWidth) {
+			balloon.dir.X = -balloon.dir.X
+		}
+		if p.Y < 0 || p.Y > float32(winHeight) {
+			balloon.dir.Y = -balloon.dir.Y
+		}
+		if p.Z < 0 || p.Z > float32(winDepth) {
+			balloon.dir.Z = -balloon.dir.Z
+		}
+		balloon.pos = Add(balloon.pos, Mult(balloon.dir, elaspedTime))
 	}
-	p := Add(balloon.pos, Mult(balloon.dir, elaspedTime))
-	if p.X < 0 || p.X > float32(winWidth) {
-		balloon.dir.X = -balloon.dir.X
+	if balloonsExploded {
+		filteredBalloons := balloons[0:0]
+		for _, balloon := range balloons {
+			if !balloon.exploded {
+				filteredBalloons = append(filteredBalloons, balloon)
+			}
+		}
+		balloons = filteredBalloons
 	}
-	if p.Y < 0 || p.Y > float32(winHeight) {
-		balloon.dir.Y = -balloon.dir.Y
-	}
-	if p.Z < 0 || p.Z > float32(winDepth) {
-		balloon.dir.Z = -balloon.dir.Z
-	}
-	balloon.pos = Add(balloon.pos, Mult(balloon.dir, elaspedTime))
+	return balloons
 }
 
 func (balloon *balloon) draw(renderer *sdl.Renderer) {
@@ -354,13 +378,8 @@ func main() {
 		currentMouseState = getMouseState()
 
 		renderer.Copy(cloudTexture, nil, nil)
-
-		for _, balloon := range balloons {
-			balloon.update(elaspedTime, currentMouseState, prevMouseState, &audioState)
-		}
-
+		balloons := updateBalloons(balloons, elaspedTime, currentMouseState, prevMouseState, &audioState)
 		sort.Stable(balloonArray(balloons))
-
 		for _, balloon := range balloons {
 			balloon.draw(renderer)
 		}
