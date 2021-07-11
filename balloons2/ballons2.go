@@ -1,6 +1,7 @@
 package main
 
 // To Do
+// [ ]	Some bug with the last few balloons. Can't click and they keep speeding up.
 // [ ]	Try using insertion sort for balloons  - https://en.wikipedia.org/wiki/Insertion_sort
 // [ ]	Time it to see if you can beat Go's built sort
 // [ ]	Implement collisions with the balloons
@@ -21,7 +22,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const winWidth, winHeight, winDepth int = 800, 600, 100
+const winWidth, winHeight, winDepth int = 1280, 720, 100
 
 type audioState struct {
 	explosionBytes []byte
@@ -63,7 +64,7 @@ func newBalloon(tex *sdl.Texture, pos, dir Vector3, explosionTexture *sdl.Textur
 	if err != nil {
 		panic(err)
 	}
-	return &balloon{tex, pos, dir, int(w), int(h), false, false, time.Now(), 30, explosionTexture}
+	return &balloon{tex, pos, dir, int(w), int(h), false, false, time.Now(), 20, explosionTexture}
 }
 
 type balloonArray []*balloon
@@ -130,6 +131,7 @@ func updateBalloons(balloons []*balloon, elaspedTime float32,
 			}
 		}
 		p := Add(balloon.pos, Mult(balloon.dir, elaspedTime))
+
 		if p.X < 0 || p.X > float32(winWidth) {
 			balloon.dir.X = -balloon.dir.X
 		}
@@ -139,8 +141,10 @@ func updateBalloons(balloons []*balloon, elaspedTime float32,
 		if p.Z < 0 || p.Z > float32(winDepth) {
 			balloon.dir.Z = -balloon.dir.Z
 		}
+
 		balloon.pos = Add(balloon.pos, Mult(balloon.dir, elaspedTime))
 	}
+
 	if balloonsExploded {
 		filteredBalloons := balloons[0:0]
 		for _, balloon := range balloons {
@@ -362,7 +366,7 @@ func main() {
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloon(renderer, 10)
+	balloons := loadBalloon(renderer, 100)
 	var elaspedTime float32
 	currentMouseState := getMouseState()
 	prevMouseState := currentMouseState
