@@ -366,7 +366,7 @@ func main() {
 	cloudPixels := rescaleAndDraw(cloudNoise, min, max, cloudGradient, winWidth, winHeight)
 	cloudTexture := pixelsToTexture(renderer, cloudPixels, winWidth, winHeight)
 
-	balloons := loadBalloon(renderer, 100)
+	balloons := loadBalloon(renderer, 3)
 	var elaspedTime float32
 	currentMouseState := getMouseState()
 	prevMouseState := currentMouseState
